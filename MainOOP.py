@@ -9,10 +9,6 @@ import os
 
 
 
-
-
-
-
 def valid_data(data):
     pass
 
