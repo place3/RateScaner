@@ -28,25 +28,67 @@ from skimage.morphology import area_closing
 
 ptes.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
-def get_img(photo_path):
-    img = cv2.imread(photo_path)
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    # img = cv2.rotate(img, cv2.ROTATE_90_COUNTERCLOCKWISE)
-    # img = cv2.resize(img, (1920, 1080))
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
-    kernel = np.ones((2, 2), np.uint8)
-    thresh = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel)
-    #thresh = cv2.resize(thresh, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
-    #cv2.imshow('name', img)
-    return thresh
+class ImgScaner():
+    def __init__(self, photo_path):
 
-def get_text(img):
-    config = r'--oem 3 --psm 6'
-    #text = ptes.image_to_string(img,config = config,  lang='rus')
-    # data = ptes.image_to_data(img, config= config, lang='rus')
-    text = ptes.image_to_string(img, config="--oem 3 --psm 6   -c tessedit_char_whitelist=1234567890оОOoxXхХiI!|")
-    return text
+
+
+    def get_img(photo_path):
+        img = cv2.imread(photo_path)
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        # img = cv2.rotate(img, cv2.ROTATE_90_COUNTERCLOCKWISE)
+        # img = cv2.resize(img, (1920, 1080))
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+        kernel = np.ones((2, 2), np.uint8)
+        thresh = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel)
+        # thresh = cv2.resize(thresh, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
+        # cv2.imshow('name', img)
+        return thresh
+
+    def get_text(self, img):
+        config = r'--oem 3 --psm 6'
+        # text = ptes.image_to_string(img,config = config,  lang='rus')
+        # data = ptes.image_to_data(img, config= config, lang='rus')
+        text = ptes.image_to_string(img, config="--oem 3 --psm 6   -c tessedit_char_whitelist=1234567890оОOoxXхХiI!|")
+        return text
+
+
+    def get_structure_data(self, img, areas, page_num):
+        k_work = 6
+        k_numb = 6
+
+        x, y, w, h = areas['id_exp']
+        roi_exp = img[y:y + h, x:x + w]
+        id_exp = get_text(roi_exp).replace('\n', '')
+        result = [id_exp, dict()]
+        for work_n in range(1, k_work):
+            values = areas[f'work{work_n}']
+            print(1)
+            x, y, w, h = values['id']
+            work_id_roi = img[y:y + h, x:x + w]
+            work_id_text = get_text(work_id_roi).replace('\n', '')
+
+            result[1][work_id_text] = {f'{n}': None for n in range(1, k_numb + 1)}
+            for numb in range(1, k_numb + 1):
+                x, y, w, h = values[f'{numb}']
+                numb_roi = img[y:y + h, x:x + w]
+                values[f'{numb}'] = get_text(numb_roi)
+                result[1][work_id_text][f'{numb}'] = get_text(numb_roi).replace('\n', '')
+                cv2.imwrite(f'nums/{page_num}/{work_n}_{numb}.jpg', numb_roi)
+
+        print('----------------------------------')
+
+        return result
+    pass
+
+
+
+
+
+
+
+
 
 def get_ROIs(path:str):
     with open(path,'r', encoding='utf-8') as file:
@@ -57,32 +99,7 @@ def get_ROIs(path:str):
 def correct_data():
     pass
 
-def get_structure_data(img, areas, page_num):
-    k_work = 6
-    k_numb = 6
 
-    x, y, w, h = areas['id_exp']
-    roi_exp = img[y:y+h, x:x+w]
-    id_exp = get_text(roi_exp).replace('\n', '')
-    result = [id_exp, dict()]
-    for work_n in range(1, k_work):
-        values = areas[f'work{work_n}']
-        print(1)
-        x, y, w, h = values['id']
-        work_id_roi = img[y:y + h, x:x + w]
-        work_id_text = get_text(work_id_roi).replace('\n','')
-
-        result[1][work_id_text] = {f'{n}': None for n in range(1, k_numb+1)}
-        for numb in range(1, k_numb+1):
-            x, y, w, h = values[f'{numb}']
-            numb_roi = img[y:y+h, x:x+w]
-            values[f'{numb}'] = get_text(numb_roi)
-            result[1][work_id_text][f'{numb}'] = get_text(numb_roi).replace('\n', '')
-            cv2.imwrite(f'nums/{page_num}/{work_n}_{numb}.jpg',numb_roi)
-
-    print('----------------------------------')
-
-    return result
 
 def main():
     file_path = r"C:\Users\us3r02\PycharmProjects\ege_doc_scan\scans\1.jpg"

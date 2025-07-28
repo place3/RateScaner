@@ -113,7 +113,12 @@ class SQL_db(table):
 if __name__ == "__main__":
     import os
 
+    sql_db_path = r'db_dir/ege_works.db'
+    excel_db_path = 'user_table/test.xlsx'
+
     user_excel_table = excel_table()
+    user_SQL_database = SQL_db()
+
     if not os.path.exists(excel_db_path):
         user_excel_table.create_exell_tab(excel_db_path) # user table
-    create_sql_table('db_dir/ege_works.db')
+    user_SQL_database.create_sql_table('db_dir/ege_works.db')
