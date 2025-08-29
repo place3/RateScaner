@@ -32,7 +32,7 @@ ptes.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 class ImgScaner():
     def __init__(self, photo_path: str):
         self.photo_path = photo_path
-        self.img = self.get_img(self.photo_path)
+        self.img = self.get_img()
         self.areas = self.get_ROIs()
 
     def get_ROIs(self):
@@ -44,8 +44,8 @@ class ImgScaner():
         pass
 
 
-    def get_img(self, photo_path):
-        img = cv2.imread(photo_path)
+    def get_img(self):
+        img = cv2.imread(self.photo_path)
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         # img = cv2.rotate(img, cv2.ROTATE_90_COUNTERCLOCKWISE)
         # img = cv2.resize(img, (1920, 1080))

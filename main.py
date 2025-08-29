@@ -16,18 +16,20 @@ def main():
     all_pages = [] # вся информация (по листам проверки)
     all_works = dict()
     sql_db_path = r'db_dir/ege_works.db'
-    excel_db_path = 'user_table/test.xlsx'
+    excel_db_path = r'user_table/test.xlsx'
+    E_tab = ExcelTable(excel_db_path)
+    S_tab = SQLTable(sql_db_path)
 
     if not os.path.exists(excel_db_path):
-        create_exell_tab(excel_db_path) # user table
+        E_tab.create_exell_tab(excel_db_path) # user table
 
     if not os.path.exists(sql_db_path):
-        create_sql_table(sql_db_path) # database
+        S_tab.create_sql_table(sql_db_path) # database
 
     #чтение файлов и парсинг
     for page_num in range(1,3):
-        img = sd.get_img(f'scans/{page_num}.jpg')
-        page_info = sd.get_structure_data(img, sd.get_ROIs('ROIs.json'), page_num)
+        img_obj = sd.ImgScaner(f'scans/{page_num}.jpg')
+        page_info = img_obj.get_structure_data()
         all_pages.append(page_info)
 
 
@@ -42,11 +44,11 @@ def main():
 
     print(all_works)
     for work_id, rate in all_works.items():
-        ins_into_sql(work_id,rate)
+        S_tab.ins_into_sql(work_id,rate)
 
 
     for line_id in range(1, 6):
-        ins_into_exell(get_line(line_id, sql_db_path),  excel_db_path)
+        E_tab.ins_into_exell(S_tab.get_line(line_id))
 
 if __name__ == "__main__":
     main()
