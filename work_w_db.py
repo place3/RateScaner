@@ -89,7 +89,7 @@ class SQLTable():
         curs.execute(f"SELECT * FROM resTable WHERE id = ?", (line_numb,))
 
         raw = curs.fetchone()
-        print(raw)
+        # print(raw)
         return raw
 
     def ins_into_sql(self, work_id, rates):
