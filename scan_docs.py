@@ -74,7 +74,7 @@ def preprocess_for_cnn(roi):
     else:
         gray = roi.copy()
 
-    # Убираем рамки: немного внутренняя обрезка (если вокруг рамка)
+    # Убираем рамки: немного внутwренняя обрезка (если вокруг рамка)
     h, w = gray.shape
     pad = max(1, int(min(h, w) * 0.05))  # 5% по-умолчанию
     gray = gray[pad:h - pad, pad:w - pad] if (h > 2*pad and w > 2*pad) else gray
@@ -227,9 +227,7 @@ class ImgScaner():
 
         for work_n in range(1, k_work):  # перебор работ на листе
             work_id_roi = self.get_roi('id', work_n=work_n)
-            # if work_n == 4:
-            #     plt.imshow(work_id_roi)
-            #     plt.show()
+
             work_id_text = self.get_text_from_img(work_id_roi, 'id', digits_only=True).replace('\n', '')
             result[1][work_id_text] = {f'{n}': None for n in range(1, k_numb + 1)}
 
