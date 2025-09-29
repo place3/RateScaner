@@ -6,6 +6,9 @@ import sqlite3
 from work_w_db import *
 import sqlite3
 import os
+from db_dir.SQL_WORKER import SQL_db
+from db_dir.db_data_process import *
+from db_dir.EXCEL_WORKER import ExcelTable
 import matplotlib.pyplot as plt
 
 
@@ -19,13 +22,9 @@ def main():
     sql_db_path = r'db_dir/ege_works.db'
     excel_db_path = r'user_table/test.xlsx'
     E_tab = ExcelTable(excel_db_path)
-    S_tab = SQLTable(sql_db_path)
+    db = SQL_db(sql_db_path)
 
-    if not os.path.exists(excel_db_path):
-        E_tab.create_exell_tab()  # user table
 
-    if not os.path.exists(sql_db_path):
-        S_tab.create_sql_table()  # database
 
     # чтение файлов и парсинг
     for page_num in range(1, 3):
@@ -37,6 +36,8 @@ def main():
         all_pages.append(page_info)
 
     print('работы прочтаны')
+
+    #Реструктурирование прочитанной информации
     for page in all_pages:
         exp_id, works = page
         for work_id, rate in works.items():
@@ -46,13 +47,31 @@ def main():
             else:
                 all_works[work_id] = {'exp1': [r for r in rate.values()], 'id_exp1': exp_id}
 
-    print(all_works)
+
+    #Занесение информации об учениках в БД
+    db.create_students_table()
+    db.create_res_table()
+    data_proc = DataProcess(sql_db_path)
     for work_id, rate in all_works.items():
-        S_tab.ins_into_sql(work_id, rate)
+        res_line = data_proc.list_for_ResTable([work_id,rate])
+        db.insert_into_student(res_line)
 
-    for line_id in range(1, 6):
-        E_tab.ins_into_exell(S_tab.get_line(line_id))
+    #Обработка информации и занесение в БД
+    all_processed_lines = []
+    for line in db.get_users_table():
+        process_line = data_proc.check_rates(line[1:])
+        db.insert_into_res(process_line)
+        all_processed_lines.append(process_line)
 
+    #Создание пользовательской таблицы
+    E_tab.create_exell_tab()
+    E_tab.fill_all(all_processed_lines)
+
+
+    # for line_id in range(1, 6):
+    #     E_tab.ins_into_exell(S_tab.get_line(line_id))
+
+    db.close()
 
 if __name__ == "__main__":
     main()

@@ -6,13 +6,14 @@ import numpy as np
 import pytesseract.pytesseract as ptes
 import torch
 import torch.nn as nn
+from CNNModel.numsAndX import predict_symbol
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 
 ptes.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'  # оставь свой путь
 
 #Путь к сохранённой модели
-MODEL_PATH = r"C:\Users\us3r02\PycharmProjects\CNN_numbers_model\Pytorch_models\conv_net_model_X.ckpt"
+MODEL_PATH = r"C:\Users\us3r02\PycharmProjects\CNN_numbers_model\Pytorch_models\best_conv_net_model_X.pth"
 
 #Мэппинг выходов сети в строки
 CLASS_MAP = ['0', '1', '2', '3', '4', 'X']  # индекс -> метка
@@ -124,11 +125,14 @@ class ImgScaner():
         """
         ocr_mode: 'cnn' или 'tesseract' — выбор движка для полей 'rate'
         """
+        self.k_work = 6
+        self.k_numb = 6
         self.photo_path = photo_path
         self.ocr_mode = ocr_mode
         self.cnn = load_cnn_model() if ocr_mode == 'cnn' else None
         self.img = self.get_img()
         self.areas = self.get_ROIs()
+        self.rate_classes = ['0', '1', '2', '3', '4', 'x']
 
     def get_ROIs(self):
         with open(r'ROIs.json', 'r', encoding='utf-8') as file:
@@ -176,14 +180,16 @@ class ImgScaner():
 
     def get_text_from_img(self, img, mode, digits_only=False):
         """
-        Оставлена совместимость: mode 'rate' = поля оценок; mode 'id' = id поля.
+        mode 'rate' = поля оценок; mode 'id' = id поля.
         Если self.ocr_mode == 'cnn' и mode == 'rate', используется CNN.
         """
-        # Если для оценок выбран cnn — используем predict_with_cnn
+
         if mode == 'rate' and self.ocr_mode == 'cnn' and self.cnn is not None:
             label, conf = predict_with_cnn(self.cnn, img)
+
             # Вернём текст и, при желании, confidence (здесь просто текст)
             return label if label is not None else ""
+
         # Иначе fallback на tesseract
         config = ""
         if mode == 'rate':
@@ -217,21 +223,18 @@ class ImgScaner():
         return roi
 
     def get_structure_data(self):
-        k_work = 6
-        k_numb = 6
-
         roi_exp = self.get_roi('id_exp')
         id_exp = self.get_text_from_img(roi_exp, 'id', digits_only=True).replace('\n', '')
 
         result = [id_exp, dict()]
 
-        for work_n in range(1, k_work):  # перебор работ на листе
+        for work_n in range(1, self.k_work):  # перебор работ на листе
             work_id_roi = self.get_roi('id', work_n=work_n)
 
             work_id_text = self.get_text_from_img(work_id_roi, 'id', digits_only=True).replace('\n', '')
-            result[1][work_id_text] = {f'{n}': None for n in range(1, k_numb + 1)}
+            result[1][work_id_text] = {f'{n}': None for n in range(1, self.k_numb + 1)}
 
-            for numb in range(1, k_numb + 1):  # перебор номеров для каждого уч
+            for numb in range(1, self.k_numb + 1):  # перебор номеров для каждого уч
                 numb_roi = self.get_roi(f'{numb}', work_n=work_n)
 
                 # если режим CNN — получаем метку через сеть
