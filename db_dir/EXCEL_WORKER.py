@@ -8,12 +8,12 @@ class ExcelTable():
         self.path = excel_path
         self.wb = Workbook()
         self.ws = self.wb.active
-        pass
+        self.ws.title = "connect_rates"
+        if os.path.exists(self.path):
+            os.remove(self.path)
+
 
     def create_exell_tab(self):
-
-        if os.path.exists("user_table/test.xlsx"):
-            os.remove("user_table/test.xlsx")
         res_table_headers = ["WORK_ID",
                              "E1 N1", "E1 N2", "E1 N3", "E1 N4", "E1 N5", "E1 N6",
                              "E2 N1", "E2 N2", "E2 N3", "E2 N4", "E2 N5", "E2 N6",
