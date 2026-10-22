@@ -1,96 +1,71 @@
+"""Command-line entry point for OCR or export of manually verified recognition data."""
+
+import argparse
+import json
+from pathlib import Path
 import sys
 
-from CORE import scan_docs as sd
-from work_w_db import *
-import os
-from CORE.scan_docs import CNNOCR
-from db_dir.SQL_WORKER import SQL_db
-from db_dir.db_data_process import *
-from db_dir.EXCEL_WORKER import ExcelTable
-import matplotlib.pyplot as plt
+from scanner_pipeline import build_results, export_results
+
+ROOT = Path(__file__).resolve().parent
+IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff"}
 
 
+def run_scan(n_pages=None, scans_root="", res_path="", *, model_path=None,
+             rois_path=ROOT / "data/ROIs.json", work_count=6):
+    directory = Path(scans_root)
+    if not directory.is_dir():
+        raise ValueError(f"Input directory not found: {directory}")
+    images = sorted(path for path in directory.iterdir()
+                    if path.is_file() and path.suffix.lower() in IMAGE_SUFFIXES)
+    if not images:
+        raise ValueError("No supported images in input directory")
+    if n_pages is not None and len(images) != n_pages:
+        raise ValueError(f"Expected {n_pages} images, found {len(images)}")
+    if model_path is None:
+        raise ValueError("Specify model_path or --model. See README.md.")
+    if Path(res_path).exists():
+        raise FileExistsError(f"Output directory already exists: {res_path}. Choose a new directory.")
+    from CORE.scan_docs import CNNOCR, ImgScanner
+    ocr = CNNOCR(model_path)
+    pages = []
+    for image in images:
+        try:
+            page = ImgScanner(image, ocr, rois_path, work_count).get_structure_data()
+        except (ValueError, KeyError) as error:
+            raise ValueError(f"{image.name}: {error}") from error
+        pages.append(page)
+    return str(export_results(build_results(pages), res_path))
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-def run_scan(n_pages: int = 2,
-             scans_root: str = "",
-             res_path: str = "") -> str:
-    all_pages = []  # вся информация (по листам проверки)
-    all_works = dict()
-    sql_db_path = r'C:\Users\us3r02\PycharmProjects\ege_doc_scan\db_dir\ege_works.db'
-    excel_db_path = os.path.join(res_path, 'res_table.xlsx')
-    E_tab = ExcelTable(excel_db_path)
-    db = SQL_db(sql_db_path)
-
-    # чтение файлов и парсинг
-    for page in os.listdir(scans_root):
-        if page.endswith('txt'):
-            continue
-        img_obj = sd.ImgScanner(os.path.join(scans_root, page), ocr_mode=CNNOCR())
-        page_info = img_obj.get_structure_data()
-        plt.imshow(img_obj.img, cmap="gray")
-        plt.show()
-        plt.close()
-        all_pages.append(page_info)
-
-    print('работы прочтаны')
-
-    # Реструктурирование прочитанной информации
-    for page in all_pages:
-        exp_id, works = page
-        for work_id, rate in works.items():
-            if work_id in all_works.keys():
-                all_works[work_id]['exp2'] = [r for r in rate.values()]
-                all_works[work_id]['id_exp2'] = exp_id
-            else:
-                all_works[work_id] = {'exp1': [r for r in rate.values()], 'id_exp1': exp_id}
-
-    # Занесение информации об учениках в БД
-    db.create_students_table()
-    db.create_res_table()
-    data_proc = DataProcess(sql_db_path)
-    for work_id, rate in all_works.items():
-        res_line = data_proc.list_for_ResTable([work_id, rate])
-        db.insert_into_student(res_line)
-
-    # Обработка информации и занесение в БД
-    all_processed_lines = []
-    for line in db.get_users_table():
-        process_line = data_proc.check_rates(line[1:])
-        db.insert_into_res(process_line)
-        all_processed_lines.append(process_line)
-
-    # Создание пользовательской таблицы
-    E_tab.create_exell_tab()
-    E_tab.fill_all(all_processed_lines)
-
-    # for line_id in range(1, 6):
-    #     E_tab.ins_into_exell(S_tab.get_line(line_id))
-
-    db.close()
-    if not os.path.exists(res_path):
-        return ""
-    return res_path
+def main(argv=None):
+    parser = argparse.ArgumentParser(description="Compare two experts' protocol scores; export SQLite and Excel.")
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--input", type=Path, help="Directory containing only the protocol images to process")
+    source.add_argument("--from-json", type=Path, help="Manually verified recognized pages; bypass OCR")
+    parser.add_argument("--output", required=True, type=Path, help="New output directory (must not already exist)")
+    parser.add_argument("--model", type=Path, help="Trusted best_conv_net_model_X.pth checkpoint")
+    parser.add_argument("--rois", type=Path, default=ROOT / "data/ROIs.json")
+    parser.add_argument("--work-count", type=int, choices=range(1, 11), default=6)
+    parser.add_argument("--tesseract", help="Optional path to the Tesseract executable")
+    args = parser.parse_args(argv)
+    try:
+        if args.from_json:
+            pages = json.loads(args.from_json.read_text(encoding="utf-8"))
+            result = export_results(build_results(pages), args.output)
+        else:
+            if not args.model:
+                parser.error("--model is required with --input")
+            if args.tesseract:
+                import pytesseract
+                pytesseract.pytesseract.tesseract_cmd = args.tesseract
+            result = run_scan(scans_root=args.input, res_path=args.output, model_path=args.model,
+                              rois_path=args.rois, work_count=args.work_count)
+    except (OSError, ValueError, RuntimeError) as error:
+        parser.exit(1, f"Error: {error}\n")
+    print(f"Results saved to: {result}")
+    return 0
 
 
 if __name__ == "__main__":
-    SCANS_PATH = sys.argv[1]
-    RES_OUTPUT = sys.argv[2]
-    print(run_scan(scans_root=SCANS_PATH, res_path=RES_OUTPUT))
+    sys.exit(main())
