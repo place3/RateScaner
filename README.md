@@ -8,7 +8,7 @@ Python-прототип для чтения протоколов проверк�
 
 **[Бланки, результат OCR и проверенный Excel →](docs/demo.md)**
 
-<img src="scans/1.jpg" alt="Демонстрационный протокол: идентификаторы работ и рукописные оценки" width="700">
+<img src="examples/protocol_demo/input/1.jpg" alt="Демонстрационный протокол: идентификаторы работ и рукописные оценки" width="700">
 
 Два бланка → распознавание → ручная проверка → сравнение оценок → SQLite и Excel.
 В [демонстрации](docs/demo.md) сохранены исходный OCR-снимок с тремя ошибками в 60 оценках,
@@ -42,10 +42,11 @@ mkdir -p models
 cp ../CNNModel_nums_X/Pytorch_models/best_conv_net_model_X.pth models/
 ```
 
-Положите в отдельный каталог только нужные изображения. Смешанный каталог `scans/` содержит разные экспериментальные материалы и не является готовым входным набором.
+Для демонстрации используйте два бланка из `examples/protocol_demo/input/`.
+Для собственных данных подготовьте отдельный каталог только с нужными изображениями.
 
 ```bash
-python main.py --input /path/to/protocols --output outputs/scan-01 \
+python main.py --input examples/protocol_demo/input --output outputs/scan-01 \
   --model models/best_conv_net_model_X.pth \
   --rois data/ROIs.json --work-count 5
 ```
@@ -96,9 +97,10 @@ python main.py --from-json corrected_pages.json --output outputs/scan-01-reviewe
 | `scanner_pipeline.py` | Проверка двух оцениваний, сравнение, SQLite и Excel |
 | `data/ROIs.json` | Координаты полей конкретного шаблона |
 | `examples/` | Демонстрационные проверенные данные |
-| `GUI/` | Незавершённый desktop-интерфейс; отдельно от активного CLI |
+| `scripts/` | Пересборка демонстрации из сохранённых данных |
+| `tests/` | Проверки сравнения, экспорта и граничных случаев OCR |
 
-[Архитектура, исторический код и ограничения](docs/architecture.md). Обучение находится в [CNNModel_nums_X](https://github.com/place3/CNNModel_nums_X); начатый веб-интерфейс — в [web_rate_scaner](https://github.com/place3/web_rate_scaner).
+[Архитектура и ограничения](docs/architecture.md). Обучение находится в [CNNModel_nums_X](https://github.com/place3/CNNModel_nums_X); начатый веб-интерфейс — в [web_rate_scaner](https://github.com/place3/web_rate_scaner). Старый desktop-прототип и экспериментальные материалы сохранены в [архивной версии](docs/history.md).
 
 ## Проверки
 
