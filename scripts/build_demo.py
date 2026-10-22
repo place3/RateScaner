@@ -55,9 +55,9 @@ def main():
 
 ## Исходные изображения
 
-[Бланк 1](../scans/1.jpg) · [Бланк 2](../scans/2.jpg)
+[Бланк 1](../examples/protocol_demo/input/1.jpg) · [Бланк 2](../examples/protocol_demo/input/2.jpg)
 
-<img src="../scans/1.jpg" alt="Первый демонстрационный протокол оценивания" width="760">
+<img src="../examples/protocol_demo/input/1.jpg" alt="Первый демонстрационный протокол оценивания" width="760">
 
 ## Данные и результат
 
