@@ -26,5 +26,9 @@ jobs:
         run: python -m unittest discover -s tests -v
       - name: Run the documented JSON example
         run: python main.py --from-json examples/recognized_pages.json --output outputs/ci-example
+      - name: Rebuild and verify the demo preview
+        run: |
+          python scripts/build_demo.py
+          git diff --exit-code -- docs/demo.md
       - name: Check CLI help
         run: python main.py --help

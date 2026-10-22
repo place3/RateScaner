@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 import sys
 
-from scanner_pipeline import build_results, export_results
+from scanner_pipeline import process_pages
 
 ROOT = Path(__file__).resolve().parent
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff"}
@@ -35,7 +35,7 @@ def run_scan(n_pages=None, scans_root="", res_path="", *, model_path=None,
         except (ValueError, KeyError) as error:
             raise ValueError(f"{image.name}: {error}") from error
         pages.append(page)
-    return str(export_results(build_results(pages), res_path))
+    return str(process_pages(pages, res_path))
 
 
 def main(argv=None):
@@ -52,7 +52,7 @@ def main(argv=None):
     try:
         if args.from_json:
             pages = json.loads(args.from_json.read_text(encoding="utf-8"))
-            result = export_results(build_results(pages), args.output)
+            result = process_pages(pages, args.output)
         else:
             if not args.model:
                 parser.error("--model is required with --input")

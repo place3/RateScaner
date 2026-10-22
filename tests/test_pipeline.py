@@ -7,7 +7,7 @@ import sys
 import tempfile
 import unittest
 
-from scanner_pipeline import build_results, export_results
+from scanner_pipeline import build_results, export_results, process_pages
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -17,6 +17,13 @@ def pages():
 
 
 class ComparisonTests(unittest.TestCase):
+    def test_manually_transcribed_protocols_have_known_differences(self):
+        expected = json.loads((ROOT / "examples/protocol_demo/expected_pages.json").read_text())
+        rows = build_results(expected)
+        self.assertEqual([row[-2:] for row in rows], [
+            [0, ""], [2, "1 2"], [2, "1 6"], [1, "5"], [3, "1 4 6"],
+        ])
+
     def test_numeric_and_x_differences_and_leading_zeros(self):
         rows = build_results(pages())
         self.assertEqual(rows[0][0], "000001")
@@ -60,6 +67,39 @@ class ComparisonTests(unittest.TestCase):
 
 
 class ExportTests(unittest.TestCase):
+    def test_recognized_data_can_be_corrected_and_exported_again(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            output = process_pages(pages(), Path(temporary) / "first")
+            source = output / "recognized_pages.json"
+            original = source.read_bytes()
+            corrected = json.loads(original)
+            corrected[1]["works"]["000001"][1] = 2
+            second = process_pages(corrected, Path(temporary) / "corrected")
+            self.assertEqual(source.read_bytes(), original)
+            self.assertEqual(json.loads((second / "recognized_pages.json").read_text()), corrected)
+            with sqlite3.connect(second / "results.sqlite3") as connection:
+                actual = connection.execute('SELECT mistake, n_w_mistake FROM results WHERE WORK_ID=?', ("000001",)).fetchone()
+            self.assertEqual(actual, (1, "4"))
+
+    def test_invalid_pages_are_kept_for_review_without_export(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            incomplete = pages()[:1]
+            output = Path(temporary) / "review"
+            with self.assertRaisesRegex(ValueError, "Data saved"):
+                process_pages(incomplete, output)
+            self.assertEqual(json.loads((output / "recognized_pages.json").read_text()), incomplete)
+            self.assertTrue((output / "review_required.txt").is_file())
+            self.assertFalse((output / "results.xlsx").exists())
+            self.assertFalse((output / "results.sqlite3").exists())
+
+    def test_review_cannot_overwrite_an_existing_directory(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / "existing"
+            output.mkdir()
+            with self.assertRaises(FileExistsError):
+                process_pages(pages()[:1], output)
+            self.assertEqual(list(output.iterdir()), [])
+
     def test_sqlite_and_excel_have_expected_content(self):
         from openpyxl import load_workbook
         with tempfile.TemporaryDirectory() as temporary:
@@ -76,6 +116,9 @@ class ExportTests(unittest.TestCase):
             self.assertEqual(sheet["N2"].value, "001")
             self.assertEqual(sheet["P2"].value, 2)
             self.assertEqual(sheet["Q2"].value, "2 4")
+            self.assertEqual(sheet["C2"].fill.fgColor.rgb, "00FFF0BF")
+            self.assertEqual(sheet["I2"].fill.fgColor.rgb, "00FFF0BF")
+            self.assertNotEqual(sheet["B2"].fill.fgColor.rgb, "00FFF0BF")
             workbook.close()
 
     def test_existing_output_is_preserved(self):
@@ -98,6 +141,22 @@ class ExportTests(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertTrue((Path(temporary) / "out/results.xlsx").is_file())
+            self.assertEqual(json.loads((Path(temporary) / "out/recognized_pages.json").read_text()), pages())
+
+    def test_cli_reports_review_error_but_keeps_json(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "incomplete.json"
+            source.write_text(json.dumps(pages()[:1]))
+            result = subprocess.run(
+                [sys.executable, str(ROOT / "main.py"), "--from-json", str(source),
+                 "--output", str(root / "review")],
+                cwd=temporary, capture_output=True, text=True, timeout=20,
+            )
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("Data saved", result.stderr)
+            self.assertEqual(json.loads((root / "review/recognized_pages.json").read_text()), pages()[:1])
+            self.assertFalse((root / "review/results.xlsx").exists())
 
 
 if __name__ == "__main__":

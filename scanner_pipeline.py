@@ -1,6 +1,7 @@
 """Validate recognized pages, compare two experts and export results safely."""
 
-from contextlib import closing
+from contextlib import closing, contextmanager
+import json
 from pathlib import Path
 import sqlite3
 import tempfile
@@ -69,10 +70,9 @@ def build_results(pages):
     return rows
 
 
-def export_results(rows, output_dir):
-    """Publish both files only after successful creation; never reuse an output directory."""
-    from openpyxl import Workbook
-
+@contextmanager
+def staged_output(output_dir):
+    """Build a new result directory without touching existing outputs."""
     destination = Path(output_dir).resolve()
     if destination.exists():
         raise FileExistsError(f"Output directory already exists: {destination}. Choose a new directory.")
@@ -80,6 +80,40 @@ def export_results(rows, output_dir):
     with tempfile.TemporaryDirectory(prefix=".ratescaner-", dir=destination.parent) as temporary:
         staged = Path(temporary) / "result"
         staged.mkdir()
+        yield staged, destination
+        staged.rename(destination)
+
+
+def write_pages(pages, directory):
+    (directory / "recognized_pages.json").write_text(
+        json.dumps(pages, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+
+
+def process_pages(pages, output_dir):
+    """Keep recognized data for correction, even if semantic validation fails."""
+    try:
+        rows = build_results(pages)
+    except ValueError as error:
+        with staged_output(output_dir) as (staged, destination):
+            write_pages(pages, staged)
+            (staged / "review_required.txt").write_text(str(error) + "\n", encoding="utf-8")
+        raise ValueError(
+            f"{error}. Data saved to {destination / 'recognized_pages.json'}; "
+            "correct it and rerun --from-json with a new --output directory."
+        ) from error
+    return export_results(rows, output_dir, recognized_pages=pages)
+
+
+def export_results(rows, output_dir, *, recognized_pages=None):
+    """Publish exports and optional source data in a new directory."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill
+    from openpyxl.utils import get_column_letter
+
+    with staged_output(output_dir) as (staged, destination):
+        if recognized_pages is not None:
+            write_pages(recognized_pages, staged)
         with closing(sqlite3.connect(staged / "results.sqlite3")) as connection:
             columns = (
                 ['"WORK_ID" TEXT PRIMARY KEY']
@@ -93,11 +127,18 @@ def export_results(rows, output_dir):
         sheet = workbook.active
         sheet.title = "comparison"
         sheet.append(HEADERS)
+        for cell in sheet[1]:
+            cell.font = Font(bold=True, color="FFFFFF")
+            cell.fill = PatternFill("solid", fgColor="17324D")
         for row in rows:
             sheet.append(row)
+            for position in row[-1].split():
+                for column in (1 + int(position), 1 + SCORE_COUNT + int(position)):
+                    sheet.cell(sheet.max_row, column).fill = PatternFill("solid", fgColor="FFF0BF")
+        for column in range(1, len(HEADERS) + 1):
+            sheet.column_dimensions[get_column_letter(column)].width = 9 if 2 <= column <= 13 else 22
         sheet.freeze_panes = "B2"
         sheet.auto_filter.ref = sheet.dimensions
         workbook.save(staged / "results.xlsx")
         workbook.close()
-        staged.rename(destination)
     return destination
