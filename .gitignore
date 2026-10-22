@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.py[cod]
+.DS_Store
+.idea/
+.env
+models/
+outputs/
+.pytest_cache/
+
+# Historical duplicate snapshot (original code remains in Git history)
+/code only/
